@@ -2,6 +2,7 @@ This document outlines a comprehensive design and strategy for building an effic
 
 # Table of Content
 
+- [Table of Content](#table-of-content)
 - [Architecture Overview](#architecture-overview)
   - [Dataflow Design](#dataflow-design)
   - [Technology Stack](#technology-stack)
@@ -10,6 +11,7 @@ This document outlines a comprehensive design and strategy for building an effic
     - [Collecting Batch Data](#collecting-batch-data)
     - [Ingesting Stream Data](#ingesting-stream-data)
       - [Performance](#performance)
+      - [Further perfomance improvement](#further-perfomance-improvement)
       - [Orchestration](#orchestration)
         - [Zookeeper](#zookeeper)
         - [KRaft](#kraft)
@@ -47,37 +49,61 @@ Below are key design principles that reinforce these goals:
 
 ## Dataflow Design
 
-Data start mainly as 2 types batch and stream:
-- **Batch processing** involves collecting data over a period of time and processing it in large or moderate-sized chunks. This approach is not event-driven—instead, it relies on scheduled jobs or triggers that run at fixed intervals (e.g., hourly, daily). Data is first stored, then processed in bulk. For example, a daily sales report generated at midnight or log files analyzed every few hours are classic batch scenarios. Batch processing typically comes with **higher latency**, ranging from seconds to hours or even days, depending on the frequency of execution.
-- **Stream processing**, on the other hand, is inherently **event-driven**. Data is ingested and processed in real time, immediately as events occur. This model is designed to handle continuous flows of small data points with **very low latency**, often within milliseconds or seconds. It’s ideal for use cases where time-sensitive insights are critical, such as monitoring IoT sensors, processing financial transactions, or detecting anomalies in real time.
+All data begins its lifecycle in one of two fundamental modes: **batch** or **stream**. Each mode dictates not just how data is collected but also how it's processed, stored, and orchestrated throughout the data architecture.
 
-Batch processing can arrive in structured, semi-structured, or unstructured manner. But stream data usually comes in unstructured manner. In summary, while **batch processing** is time-driven and suited for scenarios where immediate response is not required, **stream processing** thrives in **event-driven environments** where instant reaction to incoming data is essential.
+- **Batch processing** involves collecting data over a defined time window and processing it in bulk. This form is **time-driven**, meaning jobs run on scheduled intervals (e.g., hourly, daily). Examples include generating daily reports or aggregating system logs. While batch processing offers predictability and efficiency when working with large datasets, it naturally incurs **higher latency**, often ranging from minutes to hours. However, this delay is tolerable—and even desirable—in many use cases where data completeness is prioritized over speed.
+- **Stream processing**, by contrast, is **event-driven**. Data is ingested in real time and processed with very low latency—often in **milliseconds to seconds**. It's ideal for use cases like fraud detection, real-time monitoring, and IoT telemetry. Stream processing requires a persistent **pub/sub architecture** and is designed for handling continuous data flows with low memory footprint per event, but introduces challenges in **ordering, fault tolerance**, and **exactly-once semantics**.
 
+Batch data can arrive as **structured, semi-structured**, or even **unstructured** (e.g., CSV, JSON, logs, video). Stream data, though often semi-structured (e.g., JSON, Avro), frequently starts as **unstructured** sensor or event logs and gains schema during transformation. In both cases, data is first staged and enriched before becoming fully structured.
 
-![[Pasted image 20250407221152.png]]
+![[1.architecture-overview.png]]
 
-1. Data starts with raw data in batch or streaming manner. And then it was handled according to its form batch, streaming or structured, semi-structured, unstructured.
+1. **Source Layer: Batch & Stream Entry Points**  
+    Batch data is handled via **Airflow**, a workflow orchestrator that schedules and manages ETL pipelines using **Python scripts**, while **Redis** provides in-memory queueing for task coordination. In parallel, stream data is managed via **Kafka**, a distributed pub/sub system known for **horizontal scalability, durability**, and strong ordering guarantees. This separation allows independent scalability and selective deployment based on use case.
+
+2.  **Staging Layer: Buckets for Raw + Failed Data**  
+    All incoming data—including raw, malformed, and failed records—is stored in **Google Cloud Storage (GCS)**. This ensures **auditabilty**, **replayability**, and **lineage tracing**. GCS is selected for its durability, lifecycle management (auto-expiry, archival), and seamless integration with Spark and BigQuery.
+
+3. **Staging Layer: Analytics Engine for Processing**  
+    If incoming data is **voluminous or computationally heavy**, it is processed via **Apache Spark** (batch and streaming modes). Spark is chosen for its distributed execution model and ability to handle structured (Spark SQL) and unstructured (Spark Streaming, MLlib) data at scale. Spark transforms raw data into a normalized, **semi-structured** format such as **Parquet** or **Avro**, ready for efficient downstream querying.
+
+4. **Core Layer: Columnar Database for Query Performance**  
+    Transformed datasets are loaded into **DuckDB**, a lightweight OLAP engine optimized for **columnar storage** and **analytical queries**. Fact and dimension modeling is employed:
+    - **Fact tables** (e.g., `transaction_fact`) store transactional metrics.
+    - **Dimension tables** (e.g., `account_dimension`, `time_dimension`) provide human-readable attributes for filtering and joining. This model accelerates BI queries by minimizing I/O and supporting vectorized execution.
+
+5. **Analytics Layer: Data Marts & Visualizer**  
+    DuckDB provides **data marts**—smaller, pre-joined or pre-aggregated tables optimized for reporting. These are exposed to **Tableau** or **Google Data Studio**, where dashboards are created for operational and strategic decision-making. Since data marts are pre-modeled, users avoid complex joins, improving dashboard latency and interactivity.
+
+6. **Monitoring & Metadata: Time-Series Intelligence**  
+    Every stage—from ingestion to transformation and loading—is monitored using **Prometheus**, a time-series database optimized for **high-cardinality metrics** and **real-time alerting**. It tracks:
+    - Tool health (Airflow, Kafka, Spark)
+    - Data freshness and latency
+    - Failed pipeline retries
+    - Throughput and storage usage: Time-series DBs like Prometheus are perfect for telemetry because they efficiently compress time-indexed metrics, support retention policies, and integrate with alerting tools (e.g., Grafana or Alertmanager).
+
+The architecture is **loosely coupled**. That means:
+- You can run only **batch ingestion** if streaming is not yet needed.
+- You can **detach the monitoring layer** without disrupting ingestion or transformation.
+- You can **replace Spark with DuckDB for small-scale data** when cost or simplicity is a concern.
+- You can defer implementing audit or data cataloging without compromising basic pipeline integrity.
+
+This **flexibility makes the architecture highly scalable and available**. You can scale horizontally by adding more Kafka partitions, Spark workers, or Airflow DAGs. Or scale down to a lean, local DuckDB + GCS pipeline for smaller projects or prototyping.
+
 ## Technology Stack
   
-![[techstack.png]]
-Technology Stack:
-- Core Data Warehouse
-	- DuckDB
-- Data Ingestion
-	- Apache Kafka
-	- Kafka Connect: Industry standard for high-throughput event streaming with extensive connector ecosystem
-	- Apache Airflow: Flexible scheduling, rich monitoring, and strong community support
-	- Debezium: Open-source solution for capturing database changes with low latency
-- Data Processing
-	- Apache Spark: Unified API for batch and streaming with strong performance characteristics
-- Storage
-	- Cloud Storage: Cost-effective storage for raw data with strong durability guarantees
-	- PostgresSQL: Robust relational database for storing pipeline metadata and audit information
-- Infrastructure & Operations
-	- Monitoring: Zookeeper
-	- CI/CD: Gitlab CI
+![[images/techstack.png]]
+| Component             | Tool(s)                       | Reason                                                                 |
+|----------------------|-------------------------------|------------------------------------------------------------------------|
+| Workflow Manager      | Airflow, Redis                | DAG-based orchestration, scalable task execution, retry handling      |
+| Stream Ingestion      | Kafka                         | Event ordering, partitioning, pub/sub decoupling, high throughput     |
+| Bucket Storage        | Google Cloud Storage (GCS)    | Lifecycle rules, archive tier, Spark integration                      |
+| Analytics Engine      | Apache Spark (SQL, Streaming) | Distributed compute, handles unstructured to structured transformations |
+| Columnar Database     | DuckDB                        | OLAP queries, low overhead, in-process analytics, Parquet-friendly    |
+| Data Visualizer       | Tableau, Google Data Studio   | Business-facing dashboards and self-service exploration               |
+| Monitoring & Metadata | Prometheus                    | Time-series optimized, high resolution, flexible alerting             |
+| Infrastructure & CI   | Docker, GitLab CI             | Containerized deployments, automated testing & CI/CD pipelines        |
 
-How would you scale up this technology
 # Layer Implementation
 
 ## Source Data Layer
