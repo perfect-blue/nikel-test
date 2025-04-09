@@ -1,3 +1,23 @@
+<h1> Test01 </h1>
+How to Use This Setup:
+
+1. Running the Main Module:
+```
+python transaction_processor.py
+```
+
+2. Running Tests
+```
+python -m unittest test_transaction_processor.py
+```
+
+3. Running a Specific Test
+```
+python -m unittest test_transaction_processor.TransactionDataProcessorTests.test_amount_formatting
+```
+
+At the end you will get json file `processed_transaction.json`
+
 <h1> Test02 </h1>
 
 This document outlines a comprehensive design and strategy for building an efficient, scalable data warehouse architecture. The design employs a multi-layered approach that ensures data quality, security, and performance.
