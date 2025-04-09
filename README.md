@@ -59,7 +59,8 @@ All data begins its lifecycle in one of two fundamental modes: **batch** or **st
 Batch data can arrive as **structured, semi-structured**, or even **unstructured** (e.g., CSV, JSON, logs, video). Stream data, though often semi-structured (e.g., JSON, Avro), frequently starts as **unstructured** sensor or event logs and gains schema during transformation. In both cases, data is first staged and enriched before becoming fully structured.
 
 ![1.architecture-overview.png](images/1.architecture-overview.png)
-<center>1. Architecture Overview.png</center>
+<p align="center">1. Architecture Overview.png</p>
+<br>
 
 1. **Source Layer: Batch & Stream Entry Points**  
     Batch data is handled via workflow orchestrator that schedules and manages ETL pipelines using scripts, while in-memory database provides queueing for task coordination. In parallel, stream data is managed by a distributed pub/sub system that can scale horizontally, have a strong durability, and strong ordering guarantees. This separation allows independent scalability and selective deployment based on use case.
@@ -92,14 +93,16 @@ The architecture is **loosely coupled**. That means:
 - You can defer implementing audit or data cataloging without compromising basic pipeline integrity.
 
 ![Simple data flow](images/2.simple-data-flow.png)
-<center>2. Simple data flow</center>
+<p align="center">2. Simple data flow</p>
+<br>
 
 
 This **flexibility makes the architecture highly scalable and available**. You can scale horizontally by adding more Kafka partitions, Spark workers, or Airflow DAGs. Or scale down to a lean, local DuckDB + GCS pipeline for smaller projects or prototyping.
 
 ## Technology Stack
   ![3.Techstack](images/3.techstack.png)
-<center>3. Techstack</center>
+<p align="center">3. Techstack</p>
+<br>
 
 | Component             | Tool(s)                       | Reason                                                                 |
 |----------------------|-------------------------------|------------------------------------------------------------------------|
@@ -128,7 +131,8 @@ Once all data is gathered, it can be passed to downstream tasks via **Airflow XC
 This architecture is highly observable and extendable: key metrics like file write success, record counts, and ingestion latency can be instrumented and exposed to **Prometheus**—enabling robust monitoring, alerting, and trend analysis across ingestion workflows.
 
 ![Batch Processing](images/4.batch-processing.png)
-<center>4. Batch Processing</center>
+<p align="center">4. Batch Processing</p>
+<br>
 
 
 ## Ingesting Stream Data
@@ -138,7 +142,8 @@ What happened when the data is event-driven (something that react to event) how 
 We will use Apache Kafka to collect data stream. Apache Kafka is a distributed streaming platform that enables the handling of real-time data feeds. Apache Kafka is designed to deliver extremely high throughput and low latency by efficiently handling large volumes of streaming data. Its performance is powered by a few key architectural decisions: it writes messages sequentially to disk (which is faster than random access), uses OS-level optimizations like zero-copy to send data directly from disk to the network, and allows producers to batch and compress messages to reduce I/O. These features enable Kafka to handle millions of messages per second, even under heavy load.
 
 ![Kafka Architecture](images/5.kafka-architecture.png)
-<center>5. Kafka Architecture</center>
+<p align="center">5. Kafka Architecture</p>
+<br>
 
 In Apache Kafka, the **data flow begins with a producer**, which is an application that creates messages. Each message typically consists of a **key** and a **value**—both of which are objects (like a string, integer, or custom structure). Before the message is sent, the producer uses **serializers** to convert the key and value into **binary format** (bytes), since Kafka only accepts bytes.
 
@@ -180,7 +185,8 @@ Finally, for advanced setups, Kafka can be paired with schema registries, custom
 For data ingestion and processing, a combination of **Apache Airflow** and **Python scripts** is highly effective. Airflow provides workflow orchestration, ensuring that each ingestion and transformation task runs in the correct order with dependencies, retries, and logging.
 
 ![Airflow Staging](images/6.airflow-staging.png)
-<center>6. Airflow Staging</center>
+<p align="center">6. Airflow Staging</p>
+<br>
 
 Organizing data by **date-based folders** is a best practice that helps with partitioning, traceability, and selective reprocessing. For example:
 
@@ -200,7 +206,8 @@ When choosing between file formats like JSON, Avro, and Parquet, the best practi
 As data volume grows, the staging layer must evolve from simple Python-based processing to a more **distributed, scalable architecture**. This is where **Apache Spark SQL** becomes invaluable. In this design, we maintain the layered architecture of **raw**, **clean**, and **error zones**, storing files in **S3 or GCS** and organizing them in **date-partitioned folders**. Raw data is ingested using lightweight Python scripts scheduled by **Apache Airflow**, which fetch and write unprocessed JSON into the raw zone. Then, a **Spark job** is triggered via Airflow to clean, validate, and standardize data at scale. Spark uses schema casting, null checks, and conditional logic to catch malformed records and write them into a separate error zone for observability. Valid rows are stored as **Parquet**, partitioned by `date`
 
 ![Staging Large Volume](images/7.staging-large-volume.png)
-<center>7. Staging large volume</center>
+<p align="center">7. Staging large volume</p>
+<br>
 
 ## Stream Processing
 
@@ -406,7 +413,7 @@ With **Kafka**, the architecture is slightly different. Kafka brokers expose int
 This integration enables Prometheus to provide **full observability over your ingestion system**, from orchestration in Airflow to real-time streaming in Kafka. It supports **alerting, diagnostics, and trend visualization**. However, it also requires maintaining exporters, handling secure communication (especially for remote tasks or brokers), and optionally running a Pushgateway for transient metric producers.
 
 ![Source audit](images/source-audit.png)
-<center>Source Audit</center>
+<p align="center">Source Audit</p>
 
 
 | **System**        | **What You Monitor**                                | **How It Gets to Prometheus**                              |
@@ -428,7 +435,8 @@ As in the ingestion layer, **Airflow continues to be central**, both for DAG-lev
 This configuration gives Prometheus full observability into your **compute (Spark), orchestration (Airflow), and storage (GCS)** layers—enabling alerting, trend analysis, and root cause tracing for staging failures or bottlenecks. The tradeoff is more **custom instrumentation** and attention to exporter compatibility across cloud and cluster environments.
 
 ![Staging Audit](images/staging-audit.png)
-<center>Staging Audit</center>
+<p align="center">Staging Audit</p>
+<br>
 
 | **System**        | **What You Monitor**                                              | **How It Gets to Prometheus**                                       |
 |-------------------|--------------------------------------------------------------------|----------------------------------------------------------------------|
@@ -447,7 +455,8 @@ You can also build simple **DuckDB health checks**: verifying if a table exists,
 Ultimately, Prometheus becomes a layer on top of your data model lifecycle, transforming business data quality signals (e.g., freshness, availability, cardinality) into **time-series metrics**—with the help of your orchestration and processing tools.
 
 ![Core Audit](images/core-audit.png)
-<center>Core Audit</center>
+<p align="center">Core Audit</p>
+<br>
 
 | **System**                 | **What You Monitor**                              | **How It Gets to Prometheus**                                    |
 | -------------------------- | ------------------------------------------------- | ---------------------------------------------------------------- |
