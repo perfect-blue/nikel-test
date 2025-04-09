@@ -1,9 +1,8 @@
-# Test02
+<h1> Test02 </h1>
 
 This document outlines a comprehensive design and strategy for building an efficient, scalable data warehouse architecture. The design employs a multi-layered approach that ensures data quality, security, and performance.
 
 # Table of Content
-- [Test02](#test02)
 - [Table of Content](#table-of-content)
 - [Architecture Overview](#architecture-overview)
   - [Dataflow Design](#dataflow-design)
@@ -13,9 +12,6 @@ This document outlines a comprehensive design and strategy for building an effic
   - [Ingesting Stream Data](#ingesting-stream-data)
     - [Performance](#performance)
     - [Further perfomance improvement](#further-perfomance-improvement)
-    - [Orchestration](#orchestration)
-      - [Zookeeper](#zookeeper)
-      - [KRaft](#kraft)
 - [Staging Layer](#staging-layer)
   - [Handling Large Volume](#handling-large-volume)
   - [Stream Processing](#stream-processing)
@@ -178,19 +174,6 @@ Kafka’s **replication and durability settings** can also be adjusted for bette
 On the **network layer**, tuning socket buffer sizes and using a high-throughput network (such as 10Gbps) between clients and brokers ensures that Kafka can fully utilize its write and read capabilities. Ensuring that producers and consumers are colocated (or as close as possible) to Kafka brokers reduces network latency and improves overall throughput.
 
 Finally, for advanced setups, Kafka can be paired with schema registries, custom serializers/deserializers (Avro, Protobuf), and tiered storage to separate cold and hot data. Using **observability tools** like Prometheus, Grafana, and Kafka’s JMX metrics helps proactively monitor bottlenecks and optimize configuration in response to real-world load.
-### Orchestration
-#### Zookeeper
-Kafka Use zookeeper for maintaining configuration information, naming, providing distributed synchronization, and providing group services. ZooKeeper stored information about brokers, topics, partitions, and their leaders. 
-
-It was also use for leader election ZooKeeper helped elect the **controller broker** (a special broker that manages partition leadership and cluster state).It also helped manage **partition leader election**—essential for high availability.
-
-Broker Health Monitoring. ZooKeeper monitored broker nodes. If a broker crashed or went offline, ZooKeeper would detect it and trigger leader re-election. Configuration Management
-Kafka stored some configuration data (like topic-level settings) in ZooKeeper.
-
-Synchronization & Coordination ZooKeeper helped synchronize state across brokers, especially during cluster changes (e.g., adding/removing brokers, topic changes).
-
-#### KRaft
-KRaft stands for Kafka Raft Metadata mode, which means that Kafka uses the Raft consensus protocol to manage its own metadata instead of relying on ZooKeeper.
 
 # Staging Layer
 
@@ -220,6 +203,16 @@ As data volume grows, the staging layer must evolve from simple Python-based pro
 <center>7. Staging large volume</center>
 
 ## Stream Processing
+
+Apache Spark’s **Structured Streaming** engine provides a scalable and fault-tolerant solution for processing real-time data streams. In this architecture, **Kafka** acts as the distributed log that delivers continuous data (such as events, logs, metrics, or API outputs), while **Spark** acts as the streaming processor that consumes and transforms this data in near real-time.
+
+The ingestion process begins when a Spark job subscribes to one or more **Kafka topics**, reading data in micro-batches or continuous mode depending on the configuration. Spark handles **offset tracking**, **schema enforcement**, and **fault recovery** through checkpointing. Data is typically read as key-value byte pairs, which are then deserialized using formats like JSON, Avro, or Protobuf.
+
+After ingesting the stream, Spark applies transformations such as filtering, joining with reference data, deduplication, aggregations, or enrichment using **Spark SQL** or **DataFrame operations**. The output is then written to **Google Cloud Storage** (or optionally to a data warehouse or DuckDB) using structured sinks that support exactly-once or at-least-once delivery guarantees. Spark writes the output in formats like **Parquet**, **Delta Lake**, or **JSON**, and partitions it by time or event attributes for efficient querying downstream.
+
+Performance tuning is critical: key adjustments include setting appropriate **Kafka consumer group IDs**, adjusting **trigger intervals**, tuning **parallelism**, and configuring **memory overhead** and **checkpointing location**. Properly configured, this system supports high-throughput, low-latency streaming pipelines with robust error handling and observability.
+
+![[Pasted image 20250409205038.png]]
 
 # Core Layer
 

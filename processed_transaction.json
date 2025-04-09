@@ -1,0 +1,13 @@
+{
+  "transaction_amount": "50.00",
+  "primary_account_number_masked": "123456******3456",
+  "sender_account_number": "encrypted_9876543210987654",
+  "beneficiary_account_number_masked": "112233******7788",
+  "transmission_date_time": "2025-12-01T15:30:25.000Z",
+  "ingestion_timestamp": "2025-04-09T23:07:45.000Z",
+  "processing_duration": "-20362960.00",
+  "is_void": "true",
+  "is_reversal": "false",
+  "status": "completed",
+  "source_system": "API Gateway"
+}
